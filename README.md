@@ -12,6 +12,7 @@ SAM deploy --guided
 ```
 Guided mode will automatically prompt for the S3 buckets and table name. S3 bucket names must be globally unique.
 
+Alternatively, use the CFN template and pre-built zip file in the /build folder. 
 ## Run
-To run the function, place a CalRQ data file in the source bucket. An example file is provided.
+To run the function, place a CalRQ data file in the source bucket. An example file is provided in the /sample directory.
 A results .csv file will be created in the processed bucket, and data will be added to the DynamoDB table.
