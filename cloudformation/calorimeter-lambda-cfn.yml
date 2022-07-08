@@ -1,0 +1,99 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Calorimeter processing and storage in S3/DynamoDB.
+Parameters:
+  SourceBucketName:
+    Type: String
+  DestinationBucketName:
+    Type: String
+  TableName:
+    Type: String
+Resources:
+  calorimeterlambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: app.lambda_handler
+      Runtime: python3.9
+      CodeUri: s3://aws-sam-cli-managed-default-samclisourcebucket-13sxh2c780bus/calorimeter-app/d4489ea5028419eb4cfcb8bfeeafc51b
+      Description: Calorimeter processing function
+      MemorySize: 1024
+      Timeout: 900
+      Environment:
+        Variables:
+          deriv_size: '8'
+          processed_bucket:
+            Ref: DestinationBucketName
+          table:
+            Ref: TableName
+          volume: '30000'
+      Events:
+        FileCreation:
+          Type: S3
+          Properties:
+            Bucket:
+              Ref: SourceBucket
+            Events:
+            - s3:ObjectCreated:*
+            Filter:
+              S3Key:
+                Rules:
+                - Name: suffix
+                  Value: .csv
+      Policies:
+      - S3ReadPolicy:
+          BucketName:
+            Ref: SourceBucketName
+      - S3CrudPolicy:
+          BucketName:
+            Ref: DestinationBucketName
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: TableName
+      - CloudWatchPutMetricPolicy: {}
+    Metadata:
+      SamResourceId: calorimeterlambda
+  SourceBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName:
+        Ref: SourceBucketName
+    Metadata:
+      SamResourceId: SourceBucket
+  DestinationBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName:
+        Ref: DestinationBucketName
+    Metadata:
+      SamResourceId: DestinationBucket
+  calorimetertable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+      - AttributeName: uuid
+        AttributeType: S
+      KeySchema:
+      - AttributeName: uuid
+        KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      TableName:
+        Ref: TableName
+    Metadata:
+      SamResourceId: calorimetertable
+Outputs:
+  SourceBucketName:
+    Value:
+      Ref: SourceBucketName
+    Description: S3 Bucket for object storage
+  DestinationBucketName:
+    Value:
+      Ref: DestinationBucketName
+    Description: S3 destination Bucket for object storage
+  DatabaseName:
+    Value:
+      Ref: TableName
+    Description: DynamoDB Database
+  FunctionArn:
+    Value:
+      Ref: calorimeterlambda
+    Description: Calorimeter function Arn
