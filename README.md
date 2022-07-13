@@ -1,6 +1,7 @@
 # Serverless Calorimeter Data Processing Concept
 This is a SAM template for deploying an AWS Lambda function which reads data from an S3 bucket, 
 processes it in Lambda, then writes results to a second S3 bucket and DynamoDB database
+
 Data may also be added and read via the API gateway
 
 ## Build
