@@ -1,0 +1,10 @@
+{
+    "TableName":"Calorimeter",
+    "IndexName":"StudyTime-Index",
+    "KeyConditionExpression":"StudyTime=:v1",
+    "ExpressionAttributeValues":{
+       ":v1":{
+          "S":"$util.urlDecode($input.params('StudyTime'))"
+       }
+    }
+ }

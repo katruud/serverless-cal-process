@@ -5,10 +5,13 @@ Description: Calorimeter processing and storage in S3/DynamoDB.
 Parameters:
   SourceBucketName:
     Type: String
+    Default: "Source"
   DestinationBucketName:
     Type: String
+    Default: "Destination"
   TableName:
     Type: String
+    Default: "Calorimeter"
 
 Resources:
 ## Lambda Function
