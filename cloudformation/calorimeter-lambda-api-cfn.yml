@@ -1,0 +1,329 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Calorimeter processing and storage in S3/DynamoDB. Access with REST API
+Parameters:
+  SourceBucketName:
+    Type: String
+    Default: Source
+  DestinationBucketName:
+    Type: String
+    Default: Destination
+  TableName:
+    Type: String
+    Default: Calorimeter
+  StageName:
+    Type: String
+    Default: v1
+    Description: Name of API stage.
+  AppName:
+    Type: String
+    Default: api-cal
+    Description: Name of application.
+Resources:
+  calorimeterlambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: app.lambda_handler
+      Runtime: python3.9
+      CodeUri: s3://aws-sam-cli-managed-default-samclisourcebucket-13sxh2c780bus/calorimeter-app/3a0db8b5989b1f6062d382cc6be58664
+      Description: Calorimeter processing function
+      MemorySize: 1024
+      Timeout: 900
+      Environment:
+        Variables:
+          deriv_size: '8'
+          processed_bucket:
+            Ref: DestinationBucketName
+          table:
+            Ref: TableName
+          volume: '30000'
+      Events:
+        FileCreation:
+          Type: S3
+          Properties:
+            Bucket:
+              Ref: SourceBucket
+            Events:
+            - s3:ObjectCreated:*
+            Filter:
+              S3Key:
+                Rules:
+                - Name: suffix
+                  Value: .csv
+      Policies:
+      - S3ReadPolicy:
+          BucketName:
+            Ref: SourceBucketName
+      - S3CrudPolicy:
+          BucketName:
+            Ref: DestinationBucketName
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: TableName
+      - CloudWatchPutMetricPolicy: {}
+    Metadata:
+      SamResourceId: calorimeterlambda
+  APIGatewayRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Action:
+          - sts:AssumeRole
+          Effect: Allow
+          Principal:
+            Service:
+            - apigateway.amazonaws.com
+      Policies:
+      - PolicyName: APIGatewayDynamoDBPolicy
+        PolicyDocument:
+          Version: 2012-10-17
+          Statement:
+          - Effect: Allow
+            Action:
+            - dynamodb:PutItem
+            - dynamodb:Query
+            Resource:
+              Fn::Sub:
+              - ${varTableArn}*
+              - varTableArn:
+                  Fn::GetAtt:
+                  - calorimetertable
+                  - Arn
+    Metadata:
+      SamResourceId: APIGatewayRole
+  SourceBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName:
+        Ref: SourceBucketName
+    Metadata:
+      SamResourceId: SourceBucket
+  DestinationBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName:
+        Ref: DestinationBucketName
+    Metadata:
+      SamResourceId: DestinationBucket
+  Api:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name:
+        Fn::Sub: ${AppName}
+      ApiKeySourceType: HEADER
+    Metadata:
+      SamResourceId: Api
+  CalResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId:
+        Ref: Api
+      ParentId:
+        Fn::GetAtt:
+        - Api
+        - RootResourceId
+      PathPart: cal
+    Metadata:
+      SamResourceId: CalResource
+  CalMethodPost:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId:
+        Ref: Api
+      ResourceId:
+        Ref: CalResource
+      HttpMethod: POST
+      ApiKeyRequired: true
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS
+        Credentials:
+          Fn::GetAtt:
+          - APIGatewayRole
+          - Arn
+        IntegrationHttpMethod: POST
+        Uri:
+          Fn::Sub: arn:aws:apigateway:${AWS::Region}:dynamodb:action/PutItem
+        PassthroughBehavior: WHEN_NO_TEMPLATES
+        RequestTemplates:
+          application/json: '{"TableName":"Calorimeter","Item":{"id":{"S":"$context.requestId"},"StudyTime":{"S":"$input.path(''$.StudyTime'')"},"VO2":{"S":"$input.path(''$.VO2'')"},"VCO2":{"S":"$input.path(''$.VCO2'')"},"RQ":{"S":"$input.path(''$.RQ'')"},"InflowO2":{"S":"$input.path(''$.InflowO2'')"},"OutflowO2":{"S":"$input.path(''$.OutflowO2'')"},"OutflowCO2":{"S":"$input.path(''$.OutflowCO2'')"},"dO2":{"S":"$input.path(''$.dO2'')"},"dCO2":{"S":"$input.path(''$.dCO2'')"},"InflowRate":{"S":"$input.path(''$.InflowRate'')"},"OutflowRate":{"S":"$input.path(''$.OutflowRate'')"},"Participant":{"S":"$input.path(''$.Participant'')"},"HaldaneInflow":{"S":"$input.path(''$.HaldaneInflow'')"},"MFCFlow_2":{"S":"$input.path(''$.MFCFlow_2'')"},"MFCFlow_4":{"S":"$input.path(''$.MFCFlow_4'')"}}}'
+        IntegrationResponses:
+        - StatusCode: '200'
+          ResponseTemplates:
+            application/json: '{}'
+      MethodResponses:
+      - StatusCode: '200'
+    Metadata:
+      SamResourceId: CalMethodPost
+  CalTimeResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId:
+        Ref: Api
+      ParentId:
+        Ref: CalResource
+      PathPart: '{StudyTime}'
+    Metadata:
+      SamResourceId: CalTimeResource
+  CalTimeMethodGet:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId:
+        Ref: Api
+      ResourceId:
+        Ref: CalTimeResource
+      HttpMethod: GET
+      ApiKeyRequired: true
+      AuthorizationType: NONE
+      RequestParameters:
+        method.request.path.StudyTime: true
+      Integration:
+        Type: AWS
+        Credentials:
+          Fn::GetAtt:
+          - APIGatewayRole
+          - Arn
+        IntegrationHttpMethod: POST
+        Uri:
+          Fn::Sub: arn:aws:apigateway:${AWS::Region}:dynamodb:action/Query
+        PassthroughBehavior: WHEN_NO_TEMPLATES
+        RequestParameters:
+          integration.request.path.StudyTime: method.request.path.StudyTime
+        RequestTemplates:
+          application/json: '{"TableName":"Calorimeter","IndexName":"StudyTime-Index","KeyConditionExpression":"StudyTime=:v1","ExpressionAttributeValues":{":v1":{"S":"$util.urlDecode($input.params(''StudyTime''))"}}}'
+        IntegrationResponses:
+        - StatusCode: '200'
+          ResponseTemplates:
+            application/json: "#set($inputRoot = $input.path('$'))\n{\n\t\"calorimeter\"\
+              : [\n\t\t#foreach($field in $inputRoot.Items) {\n\t\t\t\"id\": \"$field.id.S\"\
+              ,\n\t\t\t\"StudyTime\": \"$field.StudyTime.S\",\n\t\t\t\"VO2\": \"$field.VO2.S\"\
+              ,\n\t\t\t\"VCO2\": \"$field.VCO2.S\",\n\t\t\t\"RQ\": \"$field.RQ.S\"\
+              ,\n\t\t\t\"InflowO2\": \"$field.InflowO2.S\",\n\t\t\t\"InflowCO2\":\
+              \ \"$field.InflowCO2.S\",\n\t\t\t\"OutflowO2\": \"$field.OutflowO2.S\"\
+              ,\n\t\t\t\"dO2\": \"$field.dO2.S\",\n\t\t\t\"dCO2\": \"$field.dCO2.S\"\
+              ,\n\t\t\t\"InflowRate\": \"$field.InflowRate.S\",\n\t\t\t\"OutflowRate\"\
+              : \"$field.OutflowRate.S\",,\n\t\t\t\"Participant\": \"$field.Participant.S\"\
+              ,\n\t\t\t\"HaldaneInflow\": \"$field.HaldaneInflow.S\",\n\t\t\t\"MFCFlow_2\"\
+              : \"$field.MFCFlow_2.S\",\n\t\t\t\"MFCFlow_4\": \"$field.MFCFlow_4.S\"\
+              ,\n\t\t}#if($foreach.hasNext),#end\n\t\t#end\n\t]\n}"
+      MethodResponses:
+      - StatusCode: '200'
+    Metadata:
+      SamResourceId: CalTimeMethodGet
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+    - CalTimeMethodGet
+    Properties:
+      RestApiId:
+        Ref: Api
+      StageName:
+        Fn::Sub: ${StageName}
+    Metadata:
+      SamResourceId: ApiDeployment
+  ApiKey:
+    Type: AWS::ApiGateway::ApiKey
+    DependsOn:
+    - ApiDeployment
+    Properties:
+      Enabled: true
+      Name:
+        Fn::Sub: ${AppName}-apikey
+      StageKeys:
+      - RestApiId:
+          Ref: Api
+        StageName:
+          Fn::Sub: ${StageName}
+    Metadata:
+      SamResourceId: ApiKey
+  ApiUsagePlan:
+    Type: AWS::ApiGateway::UsagePlan
+    DependsOn:
+    - ApiDeployment
+    Properties:
+      ApiStages:
+      - ApiId:
+          Ref: Api
+        Stage:
+          Fn::Sub: ${StageName}
+      Throttle:
+        RateLimit: 500
+        BurstLimit: 1000
+      UsagePlanName:
+        Fn::Sub: ${AppName}-usage-plan
+      Quota:
+        Limit: 10000
+        Period: MONTH
+    Metadata:
+      SamResourceId: ApiUsagePlan
+  ApiUsagePlanKey:
+    Type: AWS::ApiGateway::UsagePlanKey
+    Properties:
+      KeyType: API_KEY
+      KeyId:
+        Ref: ApiKey
+      UsagePlanId:
+        Ref: ApiUsagePlan
+    Metadata:
+      SamResourceId: ApiUsagePlanKey
+  calorimetertable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+      - AttributeName: uuid
+        AttributeType: S
+      - AttributeName: Participant
+        AttributeType: S
+      - AttributeName: StudyTime
+        AttributeType: S
+      KeySchema:
+      - AttributeName: uuid
+        KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      TableName:
+        Ref: TableName
+      GlobalSecondaryIndexes:
+      - IndexName: StudyTime-Index
+        KeySchema:
+        - AttributeName: StudyTime
+          KeyType: HASH
+        Projection:
+          ProjectionType: ALL
+      - IndexName: Participant-Index
+        KeySchema:
+        - AttributeName: Participant
+          KeyType: HASH
+        Projection:
+          ProjectionType: ALL
+    Metadata:
+      SamResourceId: calorimetertable
+Outputs:
+  SourceBucketName:
+    Value:
+      Ref: SourceBucketName
+    Description: S3 Bucket for object storage
+  DestinationBucketName:
+    Value:
+      Ref: DestinationBucketName
+    Description: S3 destination Bucket for object storage
+  DatabaseName:
+    Value:
+      Ref: TableName
+    Description: DynamoDB Database
+  FunctionArn:
+    Value:
+      Ref: calorimeterlambda
+    Description: Calorimeter function Arn
+  ApiRootUrl:
+    Description: Root Url of the API
+    Value:
+      Fn::Sub:
+      - https://${ApiId}.execute-api.${AWS::Region}.amazonaws.com/${StageName}
+      - ApiId:
+          Ref: Api
+  ApiKeyId:
+    Description: API Key Id
+    Value:
+      Ref: ApiKey
