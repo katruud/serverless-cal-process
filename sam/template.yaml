@@ -38,6 +38,7 @@ Resources:
           processed_bucket: !Ref DestinationBucketName
           table: !Ref TableName
           volume: '30000'
+          participant: 'na'
       Events:
         FileCreation:
           Type: S3
