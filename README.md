@@ -1,11 +1,12 @@
-# Serverless Calorimeter Data Processing POC
+# Serverless Calorimeter Data Processing Concept
 This is a SAM template for deploying an AWS Lambda function which reads data from an S3 bucket, 
 processes it in Lambda, then writes results to a second S3 bucket and DynamoDB database
+Data may also be added and read via the API gateway
 
 ## Build
 Building requires SAM and Docker to be installed 
 
-To build, initalize SAM with the template file, then build and deploy
+To build, from the sam folder, initalize SAM with the template file, then build and deploy
 ```
 SAM build
 SAM deploy --guided
