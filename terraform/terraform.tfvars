@@ -1,0 +1,8 @@
+aws_region         = "us-east-1"
+function_name      = "calorimeter"
+handler_name       = "app"
+deployment_zip     = "lambda.zip"
+lambda_function_s3 = "lambda_deployment_s3.zip"
+source_bucket      = "source-34sds3"
+destination_bucket = "destination-324fde"
+table_name         = "Calorimeter"
