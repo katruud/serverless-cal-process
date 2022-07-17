@@ -18,7 +18,7 @@ tableName = os.environ['table']
 # Variables
 volume = int(os.environ['volume'])
 deriv_size = int(os.environ['deriv_size'])
-participant = int(os.environ['participant'])
+participant = str(os.environ['participant'])
 
 def lambda_handler(event, context):
 	print(event)

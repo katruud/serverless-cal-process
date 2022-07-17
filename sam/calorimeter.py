@@ -42,13 +42,14 @@ def cal_process(csv_file, volume = 0, deriv_size = 8, participant = 'na'):
 	# Create processed file
 	# Add uuid for database
 	calrq['uuid'] = [str(uuid.uuid4()) for _ in range(len(calrq.index))]
-
+	calrq['participant'] = participant 
+	
 	csv_file = os.path.splitext(csv_file)
 	result_file = csv_file[0] + '-processed' + csv_file[1]
 	calrq.to_csv(result_file,columns=['Time','VO2','VCO2','RQ','InflowO2','InflowCO2','OutflowO2',
-	'OutflowCO2','dO2','dCO2','InflowRate','OutflowRate','HaldaneInflow',co2,n2])
+	'OutflowCO2','dO2','dCO2','InflowRate','OutflowRate','HaldaneInflow',co2,n2,'participant'])
 	resultdf = calrq[['Time','VO2','VCO2','RQ','InflowO2','InflowCO2','OutflowO2',
-	'OutflowCO2','dO2','dCO2','InflowRate','OutflowRate','HaldaneInflow',co2,n2,participant,'uuid']]
+	'OutflowCO2','dO2','dCO2','InflowRate','OutflowRate','HaldaneInflow',co2,n2,'participant','uuid']]
 	
 	# Rename Time to avoid conflicts with DDB protected keywords
 	resultdf.rename(columns={'Time':'StudyTime'})

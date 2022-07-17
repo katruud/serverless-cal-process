@@ -90,7 +90,7 @@ resource "aws_iam_role_policy" "ddb_policy" {
      "dynamodb:PutItem",
      "dynamodb:UpdateItem"
     ],
-    "Resource": "arn:aws:dynamodb:us-east-1:987456321456:table/myDB"
+    "Resource": "${aws_dynamodb_table.basic-dynamodb-table.arn}"
    }
   ]
 }
@@ -111,11 +111,11 @@ resource "aws_lambda_permission" "allow_bucket" {
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.calorimeter.arn
   principal     = "s3.amazonaws.com"
-  source_arn    = aws_s3_bucket.source_bucket.id
+  source_arn    = aws_s3_bucket.source_bucket.arn
 }
 
 # Lambda deployment
-resource "aws_s3_object" "object" {
+resource "aws_s3_object" "function" {
   bucket = aws_s3_bucket.destination_bucket.id
   key    = var.lambda_function_s3
   source = var.deployment_zip
@@ -134,6 +134,7 @@ resource "aws_lambda_function" "calorimeter" {
   s3_bucket     = aws_s3_bucket.destination_bucket.id
   s3_key        = var.lambda_function_s3
   runtime       = "python3.9"
+  timeout       = 300
   environment {
     variables = {
       deriv_size       = 8
@@ -143,6 +144,9 @@ resource "aws_lambda_function" "calorimeter" {
       participant      = "test_participant"
     }
   }
+  depends_on = [
+    aws_s3_object.function
+  ]
 }
 
 # Creating s3 source bucket
